@@ -1,5 +1,24 @@
 {
   "permissions": {
+    "allow": [
+      "mcp__claude-artifacts__publish_files",
+      "mcp__claude-artifacts__publish_version",
+      "mcp__claude-artifacts__edit_version",
+      "mcp__claude-artifacts__list_artifacts",
+      "mcp__claude-artifacts__get_artifact",
+      "mcp__claude-artifacts__read_artifact",
+      "mcp__claude-artifacts__list_files",
+      "mcp__claude-artifacts__read_file",
+      "mcp__claude-artifacts__list_folders",
+      "mcp__claude-artifacts__create_folder",
+      "mcp__claude-artifacts__move_to_folder",
+      "mcp__claude-artifacts__pin_artifact",
+      "mcp__Google_Drive__search_files",
+      "mcp__Google_Drive__read_file_content",
+      "mcp__Google_Drive__download_file_content",
+      "mcp__Google_Drive__get_file_metadata",
+      "mcp__Google_Drive__create_file"
+    ],
     "deny": [
       "Bash(curl *|*sh)",
       "Bash(curl *|*bash)",
