@@ -91,7 +91,7 @@ AgenticWorkflow/
 │   ├── context-snapshots/           ← 런타임 (gitignored)
 │   └── skills/
 │       ├── sermon-orchestrator/     (설교 오케스트레이터 — Phase 0→1→2→3 전체 흐름)
-│       ├── sermon-integrator/       (설교 통합 v3.2 — 중심 자료 기반 md 최종 원고, 자료 읽기·분량 점검·설교 저장(HTML·설교 모음) 스크립트)
+│       ├── sermon-integrator/       (설교 통합 v3.3 — 중심 자료 기반 md 최종 원고, 자료 읽기·분량 점검·설교 저장(HTML·설교 모음) 스크립트)
 │       ├── workflow-generator/      (워크플로우 설계·생성)
 │       └── doctoral-writing/        (박사급 학술 글쓰기)
 ├── translations/glossary.yaml       ← 번역 용어 사전
@@ -145,7 +145,7 @@ AgenticWorkflow/
 | "저장해줘", "저장", "save" | 변경사항을 **main** 브랜치에 커밋 → `git push origin main` |
 
 - 세션에 다른 작업 브랜치가 지정되어 있어도, "저장해줘"는 이 규칙(main 직접 푸시)을 따른다.
-- **설교 원고 작업 중**의 "저장해줘"는 아래 '설교 산출물 규칙'(스킬 §8)을 따른다 — GitHub 커밋·푸시도 그 안에 포함된다.
+- **설교 원고 작업 중**의 "저장해줘"는 아래 '설교 산출물 규칙'(스킬 §9)을 따른다 — GitHub 커밋·푸시도 그 안에 포함된다.
 - 커밋 전 비밀정보(API 키·비밀번호 등) 포함 여부를 확인한다.
 
 ## 설교 산출물 규칙
@@ -153,8 +153,8 @@ AgenticWorkflow/
 > 사용자(저장소 소유자)의 명시적·영구적 지시.
 
 - **기본 형식**: 사용자가 다른 형식을 요청하기 전까지 결과물은 **.md 파일로만** 만든다 (docx·html 자동 생성 금지).
-- **md 파일명**: `날짜_설교제목_본문약식.md` (예: `261108_숙제가되어버린감사_눅17장11-19절.md` — 파일명에는 `:` 대신 `장·절`). 통합 원고 작업 규칙 전체는 `sermon-integrator` 스킬(v3.2) 참조.
-- **설교 작업 중의 "저장해줘" / "html로 저장해줘" / "설교 html 저장해줘"**: 모두 같은 요청 → **`sermon-integrator` 스킬 §8(설교 저장)**을 따른다.
+- **md 파일명**: `날짜_설교제목_본문약식.md` (예: `261108_숙제가되어버린감사_눅17장11-19절.md` — 파일명에는 `:` 대신 `장·절`). 통합 원고 작업 규칙 전체는 `sermon-integrator` 스킬(v3.3) 참조.
+- **설교 작업 중의 "저장해줘" / "html로 저장해줘" / "설교 html 저장해줘"**: 모두 같은 요청 → **`sermon-integrator` 스킬 §9(설교 저장)**을 따른다.
   최종본인지 **한 번 확인** → 색상 HTML → 아티팩트 '설교' 폴더 → '설교 모음' 갱신 → 구글 드라이브 '클로드 클라우드/설교' → GitHub(main) 커밋·푸시 → 결과표.
   도구: `.claude/skills/sermon-integrator/scripts/` (`sermon_to_html.py`, `build_sermon_collection.py --base`). 기존 '설교 모음'을 읽지 못하면 재게시하지 않는다.
   설교가 **아닌** 작업의 "html로 저장"은 HTML 파일만 만든다.
