@@ -1,7 +1,7 @@
 """설교 원고(.md) → 색상 HTML 한 편 ('설교 html 저장' 1단계)
 
 사용법:
-    python3 scripts/sermon_to_html.py <원고.md> [출력폴더=원고와 같은 폴더]
+    python3 -I scripts/sermon_to_html.py <원고.md> [출력폴더=원고와 같은 폴더]
 
 색 규칙 (사용자가 확정한 모양):
     제목(서론·대지·결론·기도) 빨강 / 성경구절 파랑 상자 / 결단 적용(첫째·둘째…) 초록 상자

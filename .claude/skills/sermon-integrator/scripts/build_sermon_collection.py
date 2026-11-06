@@ -4,7 +4,7 @@
 목록에서 설교를 누르면 같은 페이지 안에서 원고가 펼쳐진다 (외부 링크 없음).
 
 사용법:
-    python3 scripts/build_sermon_collection.py 출력.html [--base 기존.html] [원고1.md ...]
+    python3 -I scripts/build_sermon_collection.py 출력.html [--base 기존.html] [원고1.md ...]
 
     --base 기존.html : 지금 올라가 있는 '설교 모음' 페이지. 그 안의 설교를 모두 살리고,
                        새 원고만 끼워 넣는다 (같은 날짜면 새 원고로 바꿈).

@@ -91,7 +91,7 @@ AgenticWorkflow/
 │   ├── context-snapshots/           ← 런타임 (gitignored)
 │   └── skills/
 │       ├── sermon-orchestrator/     (설교 오케스트레이터 — Phase 0→1→2→3 전체 흐름)
-│       ├── sermon-integrator/       (설교 통합 v3.1 — 중심 자료 기반 md 최종 원고, 자료 읽기(HWP·Pages·구글 문서)·분량 점검 스크립트)
+│       ├── sermon-integrator/       (설교 통합 v3.2 — 중심 자료 기반 md 최종 원고, 자료 읽기·분량 점검·설교 저장(HTML·설교 모음) 스크립트)
 │       ├── workflow-generator/      (워크플로우 설계·생성)
 │       └── doctoral-writing/        (박사급 학술 글쓰기)
 ├── translations/glossary.yaml       ← 번역 용어 사전
@@ -145,6 +145,7 @@ AgenticWorkflow/
 | "저장해줘", "저장", "save" | 변경사항을 **main** 브랜치에 커밋 → `git push origin main` |
 
 - 세션에 다른 작업 브랜치가 지정되어 있어도, "저장해줘"는 이 규칙(main 직접 푸시)을 따른다.
+- **설교 원고 작업 중**의 "저장해줘"는 아래 '설교 산출물 규칙'(스킬 §8)을 따른다 — GitHub 커밋·푸시도 그 안에 포함된다.
 - 커밋 전 비밀정보(API 키·비밀번호 등) 포함 여부를 확인한다.
 
 ## 설교 산출물 규칙
@@ -152,18 +153,11 @@ AgenticWorkflow/
 > 사용자(저장소 소유자)의 명시적·영구적 지시.
 
 - **기본 형식**: 사용자가 다른 형식을 요청하기 전까지 결과물은 **.md 파일로만** 만든다 (docx·html 자동 생성 금지).
-- **md 파일명**: `날짜_설교제목_본문약식.md` (예: `261108_숙제가되어버린감사_눅17장11-19절.md` — 파일명에는 `:` 대신 `장·절`). 통합 원고 작업 규칙 전체는 `sermon-integrator` 스킬(v3.1) 참조.
-- **설교 원고에 대한 "html로 저장"** 요청 시 (설교가 아닌 작업의 "html로 저장"은 HTML 파일만 만든다) — 아래 4단계.
-  **원칙**: 단계마다 따로 시도하고, 한 단계가 안 돼도 **다음 단계는 계속**한다. 도구가 없으면 지어내지 말고 건너뛴 뒤 마지막 결과표에 적는다.
-
-  | 단계 | 할 일 | 필요한 도구 | 안 될 때 |
-  |---|---|---|---|
-  | 0 | 최종 원고 md 확인 | — | 원고가 없으면 **여기서 멈추고** 원고를 요청 |
-  | 1 | **색상 HTML**: `python3 -I scripts/sermon_to_html.py <원고.md>` → 파일명 `날짜_제목_눅17장11-19절.html`, 아티팩트 제목 `날짜_제목_눅17:11-19`를 알려 줌 → 미리보기 | python3 + markdown | 파이썬을 못 쓰면 같은 색 규칙(스크립트 안 CSS)으로 HTML을 직접 작성 |
-  | 2 | **아티팩트 게시**: 새 설교는 `publish_files`(title=아티팩트 제목) → `list_folders`로 **'설교'** 폴더 찾기(없으면 `create_folder`) → `move_to_folder`. 같은 날짜가 이미 있으면 그 slug에 재게시 | claude-artifacts | 건너뜀 → HTML 파일을 사용자에게 보내고 "아티팩트를 쓸 수 있는 곳에서 다시 요청" 안내 |
-  | 3 | **'설교 모음' 갱신** (slug `b7dc1210-b590-422d-898b-c5d15cf79d47`, 고정됨): ① `read_file(slug, paths=["index.html"])` → 디스크에 저장된 경로 ② `python3 -I scripts/build_sermon_collection.py <출력.html> --base <저장된경로> <새원고.md>` → "기존 N편 읽음 / 추가" 확인 ③ `publish_files`(slug, base_version)로 재게시 | claude-artifacts | ⚠️ **기존 페이지를 못 읽으면 재게시하지 않는다** (목록이 지워질 수 있음). 건너뛰고 보고 |
-  | 4 | **구글 드라이브**: '클로드 클라우드' › **'설교'** 폴더(`search_files`로 찾고, 없으면 생성)에 HTML 업로드(`create_file`, text/html, 변환 끔). md가 아직 없으면 md도. 업로드 크기 = 원본 크기 확인 | Google Drive | 건너뜀 → 보고. 같은 이름의 예전 파일이 있으면 **지우기 전에 목록을 보여 주고 확인** |
-  | 끝 | **결과표**: 단계별 ✅ 완료 / ⚠️ 건너뜀(이유·남은 일) + 아티팩트·드라이브 링크 | — | — |
+- **md 파일명**: `날짜_설교제목_본문약식.md` (예: `261108_숙제가되어버린감사_눅17장11-19절.md` — 파일명에는 `:` 대신 `장·절`). 통합 원고 작업 규칙 전체는 `sermon-integrator` 스킬(v3.2) 참조.
+- **설교 작업 중의 "저장해줘" / "html로 저장해줘" / "설교 html 저장해줘"**: 모두 같은 요청 → **`sermon-integrator` 스킬 §8(설교 저장)**을 따른다.
+  최종본인지 **한 번 확인** → 색상 HTML → 아티팩트 '설교' 폴더 → '설교 모음' 갱신 → 구글 드라이브 '클로드 클라우드/설교' → GitHub(main) 커밋·푸시 → 결과표.
+  도구: `.claude/skills/sermon-integrator/scripts/` (`sermon_to_html.py`, `build_sermon_collection.py --base`). 기존 '설교 모음'을 읽지 못하면 재게시하지 않는다.
+  설교가 **아닌** 작업의 "html로 저장"은 HTML 파일만 만든다.
 - **완성 후**: 결과물은 미리보기(SendUserFile render)로 바로 띄운다.
 
 ## 저장소·배포 규칙
