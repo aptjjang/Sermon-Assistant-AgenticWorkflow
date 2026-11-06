@@ -4,7 +4,12 @@
 목록에서 설교를 누르면 같은 페이지 안에서 원고가 펼쳐진다 (외부 링크 없음).
 
 사용법:
-    python3 scripts/build_sermon_collection.py 출력.html 원고1.md 원고2.md ...
+    python3 scripts/build_sermon_collection.py 출력.html [--base 기존.html] [원고1.md ...]
+
+    --base 기존.html : 지금 올라가 있는 '설교 모음' 페이지. 그 안의 설교를 모두 살리고,
+                       새 원고만 끼워 넣는다 (같은 날짜면 새 원고로 바꿈).
+                       → 다른 대화·세션에서 예전 원고 md 파일이 없어도 목록이 유지된다.
+      기존 페이지 받기: claude-artifacts read_file(slug, paths=["index.html"]) → 디스크에 저장된 경로를 --base로
 
 원고 .md 규칙:
     - 파일명: YYMMDD_설교제목.md   (날짜는 파일명 앞 6자리에서 읽음)
@@ -151,8 +156,28 @@ applyZoom();
 """
 
 
-def build(out, paths):
-    sermons = sorted((load(p) for p in paths), key=lambda s: s['ymd'], reverse=True)
+def parse_existing(path):
+    """올라가 있는 '설교 모음' 페이지에서 설교들을 다시 꺼낸다 (이 생성기가 만든 페이지 전용)"""
+    page = open(path, encoding='utf-8').read()
+    names = dict(re.findall(r'<a class="row" href="#(s-\d{6})">.*?<span class="title">(.*?)</span>', page, re.S))
+    sermons = []
+    for sid, attrs, inner in re.findall(r'<section class="view" id="(s-\d{6})"([^>]*)>(.*?)</section>', page, re.S):
+        m = re.search(r'<article><h1>(.*?)</h1>(.*)</article>', inner, re.S)
+        if not m:
+            continue
+        passage = re.search(r'data-passage="([^"]*)"', attrs)
+        if passage:
+            passage = html.unescape(passage.group(1))
+        else:  # 예전 페이지: 목록 이름 '날짜_제목_본문'의 마지막 조각
+            parts = html.unescape(names.get(sid, '')).split('_')
+            passage = parts[-1] if len(parts) >= 3 else ''
+        sermons.append({'id': sid, 'ymd': sid[2:], 'title': html.unescape(m.group(1)),
+                        'passage': passage, 'body': m.group(2)})
+    return sermons
+
+
+def build(out, sermons):
+    sermons = sorted(sermons, key=lambda s: s['ymd'], reverse=True)
     rows, articles = [], []
     for s in sermons:
         y, m, d = s['ymd'][:2], s['ymd'][2:4], s['ymd'][4:]
@@ -162,7 +187,7 @@ def build(out, paths):
             f'<span class="title">{html.escape(name)}</span>'
             f'<span class="meta">20{y}년 {int(m)}월 {int(d)}일 주일</span></a></li>')
         articles.append(
-            f'<section class="view" id="{s["id"]}" hidden><div class="bar"><a class="back" href="#list">← 설교 모음</a>'
+            f'<section class="view" id="{s["id"]}" data-passage="{html.escape(s["passage"])}" hidden><div class="bar"><a class="back" href="#list">← 설교 모음</a>'
             f'<span class="zoom"><button type="button" data-z="-1" aria-label="글자 작게">가-</button>'
             f'<button type="button" data-z="1" aria-label="글자 크게">가+</button></span></div>'
             f'<article><h1>{html.escape(s["title"])}</h1>{s["body"]}</article></section>')
@@ -181,5 +206,23 @@ def build(out, paths):
     print(f'saved {out} ({len(sermons)}편)')
 
 
+def main(argv):
+    out, rest, base = argv[0], argv[1:], None
+    if '--base' in rest:
+        i = rest.index('--base')
+        base = rest[i + 1]
+        rest = rest[:i] + rest[i + 2:]
+    merged = {}
+    if base:
+        for s in parse_existing(base):
+            merged[s['id']] = s
+        print(f'기존 페이지에서 {len(merged)}편 읽음')
+    for p in rest:
+        s = load(p)
+        print(('바꿈' if s['id'] in merged else '추가') + f": {s['id']} {s['title']}")
+        merged[s['id']] = s
+    build(out, list(merged.values()))
+
+
 if __name__ == '__main__':
-    build(sys.argv[1], sys.argv[2:])
+    main(sys.argv[1:])
