@@ -100,17 +100,25 @@ a.row:focus-visible, a.back:focus-visible { outline: 2px solid var(--accent); ou
         color: var(--accent); font-size: 15px; }
 .title { font-size: 17px; font-weight: 600; }
 .meta { color: var(--muted); font-size: 14px; }
-a.back { display: inline-block; margin-bottom: 12px; padding: 6px 12px; border: 1px solid var(--line);
-         border-radius: 999px; color: var(--accent); text-decoration: none; font-size: 14px; font-weight: 600; }
-article h1 { text-align: center; font-size: 26px; margin: 8px 0 4px; text-wrap: balance; }
-article h1 + p { text-align: center; color: var(--muted); font-size: 14px; }
-article h2 { color: var(--accent); font-size: 20px; margin-top: 40px;
+/* 원고 상단 막대: 목록으로 돌아가기 + 글자 크기 (앱 안에서는 손가락 확대가 막혀 있어 버튼으로 대신) */
+.bar { position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between; align-items: center;
+       gap: 8px; padding: 8px 0; margin-bottom: 4px; background: var(--bg); border-bottom: 1px solid var(--line); }
+a.back, .zoom button { padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px;
+         background: var(--bg); color: var(--accent); text-decoration: none; font: inherit;
+         font-size: 14px; font-weight: 600; cursor: pointer; }
+.zoom { display: flex; gap: 6px; }
+.zoom button { min-width: 3.2em; }
+.zoom button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+article { font-size: var(--fs, 16px); }
+article h1 { text-align: center; font-size: 1.6em; margin: 8px 0 4px; text-wrap: balance; }
+article h1 + p { text-align: center; color: var(--muted); font-size: 0.875em; }
+article h2 { color: var(--accent); font-size: 1.25em; margin-top: 40px;
              border-bottom: 2px solid var(--line); padding-bottom: 6px; text-wrap: balance; }
 article strong { color: var(--scripture); font-weight: 600; }
 article p > strong:only-child { display: block; background: var(--scripture-bg);
              border-left: 4px solid var(--scripture); padding: 10px 14px; border-radius: 4px; }
 article p > strong.apply { color: var(--apply); background: var(--apply-bg); border-left-color: var(--apply); }
-.cue { color: var(--cue); font-style: italic; font-size: 15px; }
+.cue { color: var(--cue); font-style: italic; font-size: 0.94em; }
 article hr { border: none; border-top: 1px solid var(--line); margin: 24px 0; }
 """
 
@@ -124,6 +132,22 @@ function show() {
 }
 window.addEventListener('hashchange', show);
 show();
+
+/* 글자 크기: 14~28px, 이 휴대폰에서만 기억 */
+var SIZES = [14, 16, 18, 20, 22, 24, 26, 28], zi = 1;
+try { var saved = parseInt(localStorage.getItem('sermon-font-step'), 10);
+      if (saved >= 0 && saved < SIZES.length) zi = saved; } catch (e) {}
+function applyZoom() {
+  document.documentElement.style.setProperty('--fs', SIZES[zi] + 'px');
+  try { localStorage.setItem('sermon-font-step', zi); } catch (e) {}
+}
+document.addEventListener('click', function (e) {
+  var b = e.target.closest('.zoom button');
+  if (!b) return;
+  zi = Math.min(SIZES.length - 1, Math.max(0, zi + parseInt(b.dataset.z, 10)));
+  applyZoom();
+});
+applyZoom();
 """
 
 
@@ -138,7 +162,9 @@ def build(out, paths):
             f'<span class="title">{html.escape(name)}</span>'
             f'<span class="meta">20{y}년 {int(m)}월 {int(d)}일 주일</span></a></li>')
         articles.append(
-            f'<section class="view" id="{s["id"]}" hidden><a class="back" href="#list">← 설교 모음</a>'
+            f'<section class="view" id="{s["id"]}" hidden><div class="bar"><a class="back" href="#list">← 설교 모음</a>'
+            f'<span class="zoom"><button type="button" data-z="-1" aria-label="글자 작게">가-</button>'
+            f'<button type="button" data-z="1" aria-label="글자 크게">가+</button></span></div>'
             f'<article><h1>{html.escape(s["title"])}</h1>{s["body"]}</article></section>')
     page = f"""<!DOCTYPE html>
 <html lang="ko"><head><meta charset="utf-8">
