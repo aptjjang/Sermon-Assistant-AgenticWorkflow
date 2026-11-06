@@ -91,7 +91,7 @@ AgenticWorkflow/
 │   ├── context-snapshots/           ← 런타임 (gitignored)
 │   └── skills/
 │       ├── sermon-orchestrator/     (설교 오케스트레이터 — Phase 0→1→2→3 전체 흐름)
-│       ├── sermon-integrator/       (설교 통합 v3.0 — 중심 자료 기반 md 최종 원고, HWP 읽기·분량 점검 스크립트)
+│       ├── sermon-integrator/       (설교 통합 v3.1 — 중심 자료 기반 md 최종 원고, 자료 읽기(HWP·Pages·구글 문서)·분량 점검 스크립트)
 │       ├── workflow-generator/      (워크플로우 설계·생성)
 │       └── doctoral-writing/        (박사급 학술 글쓰기)
 ├── translations/glossary.yaml       ← 번역 용어 사전
@@ -152,7 +152,7 @@ AgenticWorkflow/
 > 사용자(저장소 소유자)의 명시적·영구적 지시.
 
 - **기본 형식**: 사용자가 다른 형식을 요청하기 전까지 결과물은 **.md 파일로만** 만든다 (docx·html 자동 생성 금지).
-- **md 파일명**: `날짜_설교제목_본문약식.md` (예: `261108_숙제가되어버린감사_눅17장11-19절.md` — 파일명에는 `:` 대신 `장·절`). 통합 원고 작업 규칙 전체는 `sermon-integrator` 스킬(v3.0) 참조.
+- **md 파일명**: `날짜_설교제목_본문약식.md` (예: `261108_숙제가되어버린감사_눅17장11-19절.md` — 파일명에는 `:` 대신 `장·절`). 통합 원고 작업 규칙 전체는 `sermon-integrator` 스킬(v3.1) 참조.
 - **"html로 저장"** 요청 시:
   1. 색상 HTML 생성 — 파일명 `날짜_설교제목_성경약식.html` (파일명에는 `:` 대신 `눅17장11-19절`처럼 표기)
   2. claude.ai **아티팩트로 게시** → 아티팩트 **'설교' 폴더**로 이동

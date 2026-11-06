@@ -1,7 +1,12 @@
-"""설교 원고(md) 분량·형식 점검
+"""설교 원고 분량·형식 점검 (md · HWP · Pages · 구글 문서 · txt)
 
 사용법:
-    python3 sermon_length.py <원고.md> [제한분=15]
+    python3 sermon_length.py <원고> [제한분=15]
+
+<원고>는 md 최종 원고 외에도 doc_to_text.py가 읽는 모든 형식을 받는다:
+    .hwp / .pages / .txt / 구글 드라이브 download_file_content JSON(HWP·Pages·구글 문서)
+    - md 원고: '## 서론'~'## <기도>' 구간을 설교로, 봉독·기도를 따로 계산
+    - 그 밖의 자료(설교 초안 등): 구간 구분 없이 전체를 설교로 계산
 
 보고 내용:
     - 본문 봉독 / 설교(서론~결론) / 기도 글자 수(공백 제외)와 예상 시간(분당 280~320자)
@@ -10,6 +15,7 @@
     - 세 줄(약 120자)이 넘는 긴 문장
     - 표시 이름 제안: 날짜_제목_본문약식
 """
+import os
 import re
 import sys
 
@@ -38,11 +44,22 @@ def nchars(s):
 
 
 def short_passage(text):
+    """'누가복음 17:11-19' 또는 '누가복음 17장 11-19절' → ('눅17:11-19', '눅17장11-19절')"""
+    verses = r"(\d+(?:\s*[-~,]\s*\d+(?!\d*\s*[:장]))*)"  # 뒤따르는 다른 장:절은 붙이지 않음
+    found = []  # (글 속 위치, 표시용, 파일용) — 가장 앞에 나온 본문을 쓴다
     for full, short in BOOKS:
-        m = re.search(full + r"\s*(\d+):(\d[\d\-~,]*)", text)
+        for pat in (full + r"\s*(\d+):" + verses, full + r"\s*(\d+)장\s*" + verses):
+            m = re.search(pat, text)
+            if m:
+                v = re.sub(r"\s", "", m.group(2))
+                found.append((m.start(), f"{short}{m.group(1)}:{v}", f"{short}{m.group(1)}장{v}절"))
+        m = re.search(full + r"\s*(\d+)(편|장)(?!\s*\d)", text)  # 장 전체 (예: 시편 23편)
         if m:
-            return f"{short}{m.group(1)}:{m.group(2)}", f"{short}{m.group(1)}장{m.group(2)}절"
-    return "", ""
+            found.append((m.start(), f"{short}{m.group(1)}{m.group(2)}", f"{short}{m.group(1)}{m.group(2)}"))
+    if not found:
+        return "", ""
+    _, disp, fname = min(found)
+    return disp, fname
 
 
 def section(text, start, end):
@@ -54,17 +71,28 @@ def section(text, start, end):
 def main():
     path = sys.argv[1]
     limit = float(sys.argv[2]) if len(sys.argv) > 2 else 15
-    t = open(path, encoding="utf-8").read()
-    reading = t[t.find("**"):t.find("## 서론")] if "## 서론" in t else ""
-    sermon = section(t, "## 서론", "## <기도>")
-    prayer = section(t, "## <기도>", "## 기도제목")
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # python3 -I 로 실행해도 찾도록
+    from doc_to_text import read_any  # 같은 폴더의 자료 읽기 도구
+    src_title, t = read_any(path)
+    is_md = "## 서론" in t
+    if is_md:  # md 최종 원고
+        reading = t[t.find("**"):t.find("## 서론")]
+        sermon = section(t, "## 서론", "## <기도>")
+        prayer = section(t, "## <기도>", "## 기도제목")
+    else:  # 초안·해설 등 구간 표시가 없는 자료
+        print("※ 구간(## 서론 등) 표시가 없어 전체를 설교로 계산합니다\n")
+        reading, sermon, prayer = "", t, ""
 
     print("[분량] 공백 제외, 분당 280~320자 기준")
-    total = 0
-    for label, part in (("본문 봉독", reading), ("설교(서론~결론)", sermon), ("기도", prayer)):
-        n = nchars(part); total += n
-        print(f"  {label}: {n}자  {n/320:.1f}~{n/280:.1f}분")
-    print(f"  합계: {total}자  {total/320:.1f}~{total/280:.1f}분")
+    if is_md:
+        total = 0
+        for label, part in (("본문 봉독", reading), ("설교(서론~결론)", sermon), ("기도", prayer)):
+            n = nchars(part); total += n
+            print(f"  {label}: {n}자  {n/320:.1f}~{n/280:.1f}분")
+        print(f"  합계: {total}자  {total/320:.1f}~{total/280:.1f}분")
+    else:
+        n = nchars(sermon)
+        print(f"  전체: {n}자  {n/320:.1f}~{n/280:.1f}분")
     n = nchars(sermon)
     if n / 300 > limit:
         print(f"  ⚠ 설교가 {limit:.0f}분을 넘을 수 있음 → 약 {int(n - limit*300)}자 줄이기 권장")
@@ -85,10 +113,12 @@ def main():
     for s in longs[:5]:
         print("  -", s[:50] + "…")
 
-    title = t.splitlines()[0].lstrip("# ").replace(" ", "")
-    head = t.splitlines()[2] if len(t.splitlines()) > 2 else ""
-    disp, fname = short_passage(head)
-    m = re.match(r"(\d{6})", path.split("/")[-1])
+    if not is_md:  # 이름 제안은 md 최종 원고에만
+        return
+    lines = [x for x in t.splitlines() if x.strip()]
+    title = (lines[0] if lines else "").lstrip("# ").replace(" ", "")
+    disp, fname = short_passage("\n".join(lines[:6]))
+    m = re.match(r"(\d{6})", src_title) or re.match(r"(\d{6})", path.split("/")[-1])
     ymd = m.group(1) if m else "YYMMDD"
     print(f"\n[이름 제안] 표시: {ymd}_{title}_{disp}   파일: {ymd}_{title}_{fname}.md")
 
