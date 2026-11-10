@@ -3,8 +3,9 @@
 사용법:
     python3 lyric_check.py <가사.txt> [--title 제목]
         가사 한 편을 점검한다. <가사.txt> 자리에 - 를 쓰면 표준 입력에서 읽는다.
-    python3 lyric_check.py --compare <이전.txt> <수정.txt> [--title 제목]
+    python3 lyric_check.py --compare <이전.txt> <수정.txt> [--title 제목] [--rushed]
         수정 전후를 줄 단위로 비교한다(멜로디를 지키려면 글자 수가 같아야 한다).
+        --rushed: 몰리는 줄을 일부러 줄인 수정이다. 줄어든 줄을 '고침'이 아니라 '줄임'으로 본다.
 
 가사 파일은 수노 Lyrics 칸에 넣는 모양 그대로 쓴다:
     [Verse 1]            ← 대괄호 = 섹션 표시(불리지 않음)
@@ -14,7 +15,8 @@
 보고 내용:
     - 섹션 순서, 줄별 글자 수(한글 음절 수), 부르는 글자 수 합계
     - 후렴이 매번 같은 글자인가 / 1절과 2절의 줄별 글자 수가 같은가
-    - 줄 길이, 줄 끝 받침, 설교 말투, 제목(훅) 위치, [End] 표시
+    - 마지막 후렴이 첫 후렴과 줄 수·글자 수가 같은가 ('턴'은 단어만 바꾼다)
+    - 줄 길이, 줄 끝 받침, 설교 말투, 한 구간 안의 말투 섞임, 제목(훅) 위치, [End] 표시
     - 등급: 고침(반드시 고친다) · 주의(다시 본다) · 참고(알고 넘어간다)
 
 끝낼 때 '고침'이 하나라도 있으면 종료 코드 1, 없으면 0.
@@ -48,12 +50,19 @@ SONORANT = {4, 5, 6, 8, 10, 11, 12, 13, 15, 16, 21}
 
 SERMON = [  # 설교·권고 말투 → 1인칭 고백으로 바꾼다
     (r"여러분", "여러분"), (r"십시오", "~십시오"), (r"바랍니다", "~바랍니다"),
-    (r"권합니다", "~권합니다"), (r"[가-힣]야\s*(합니다|한다|해요|하는|하네|됩니다|된다|돼)|[가-힣]야만", "~해야 한다"),
+    (r"권합니다", "~권합니다"), (r"[가-힣]야\s*(합니다|한다|해요|하는|하네|하리|하지|됩니다|된다|돼)|[가-힣]야만", "~해야 한다"),
 ]
-STIFF = [r"것입니다", r"때문입니다", r"합시다"]  # 설명·권유 말투
+SOFT = [  # 설명·권유 말투 → 다시 본다
+    (r"것입니다", "설명 말투 '것입니다' — '-네 · -요 · -리' 같은 고백 어미로"),
+    (r"때문입니다", "설명 말투 '때문입니다' — '-네 · -요 · -리' 같은 고백 어미로"),
+    (r"합시다", "권유 말투 '합시다' — 듣는 사람에게 권하지 말고 고백으로"),
+    (r"세요\s*$", "'-세요' — 듣는 사람에게 권하는 말이면 1인칭 고백으로 (하나님께 드리는 말이면 둔다)"),
+    (r"하라\s*$", "명령형 '-하라' — 권하는 말이면 고백으로 (브리지에서 말씀을 풀어 쓴 선포면 둔다)"),
+]
 EMOTION = r"슬프|슬퍼|슬픔|기쁘|기뻐|기쁨|외롭|외로|두렵|두려|행복|우울|괴롭|괴로|불안"
 FILLERS = ["은혜", "영광", "임재", "보혈", "축복", "능력", "거룩", "존귀"]
 PARTICLE_END = set("을를은는의에")
+PRE_MAX_LINES, BRIDGE_MAX_LINES = 2, 4
 
 TAG = re.compile(r"^\s*\[([^\]]+)\]\s*$")
 PAREN = re.compile(r"[(（][^)）]*[)）]")
@@ -66,6 +75,31 @@ def hangul(s):
 def coda(ch):
     """받침 번호. 0이면 받침이 없다."""
     return (ord(ch) - 0xAC00) % 28
+
+
+def stop_codas(sung):
+    """소리가 막히는 받침의 개수. 뒤 글자가 모음으로 시작하면 받침이 넘어가므로 세지 않는다."""
+    n = 0
+    for word in sung.split():
+        chars = hangul(word)
+        for i, c in enumerate(chars):
+            k = coda(c)
+            if not k or k in SONORANT:
+                continue
+            if i + 1 < len(chars) and (ord(chars[i + 1]) - 0xAC00) // 588 == 11:
+                continue
+            n += 1
+    return n
+
+
+def ending(sung):
+    """줄 끝 말투: '-ㅂ니다' / '-요' / 그 밖은 None"""
+    chars = hangul(sung)
+    if len(chars) >= 2 and chars[-2] + chars[-1] == "니다":
+        return "-ㅂ니다"
+    if chars and chars[-1] == "요":
+        return "-요"
+    return None
 
 
 def tag_kind(name):
@@ -113,7 +147,8 @@ def sung_lines(sec):
     return [ln for ln in sec["lines"] if ln["sung"]]
 
 
-def check(secs, directives, title=None):
+def check(secs, directives, title=None, allowed=frozenset()):
+    """allowed: 몰림 처방으로 일부러 줄인 줄의 (섹션 종류, 줄 번호) 모음"""
     out = []
 
     def add(level, where, msg):
@@ -154,6 +189,16 @@ def check(secs, directives, title=None):
                 add("참고", f["label"], "첫 후렴과 같습니다 — 단어 하나를 바꾸는 '턴'이 없습니다")
             elif len(changed) > 2:
                 add("주의", f["label"], f"첫 후렴과 다른 줄이 {len(changed)}개입니다 ('턴'은 한두 줄만)")
+            fl, cl = sung_lines(f), sung_lines(choruses[0])
+            if len(fl) != len(cl):
+                add("주의", f["label"], f"줄 수가 첫 후렴과 다릅니다 ({len(cl)}줄 ↔ {len(fl)}줄) — '턴'은 줄을 더하지 않고 단어만 바꿉니다")
+            else:
+                for i, (a, b) in enumerate(zip(cl, fl), 1):
+                    d = abs(a["n"] - b["n"])
+                    if d > KEEP_DIFF:
+                        add("고침", f"{f['label']} {i}줄", f"첫 후렴은 {a['n']}자, 여기는 {b['n']}자 — 같은 선율에 얹히지 않습니다")
+                    elif d:
+                        add("주의", f"{f['label']} {i}줄", f"첫 후렴은 {a['n']}자, 여기는 {b['n']}자 (1자 차이) — 같은 글자 수의 말로 바꿔 봅니다")
 
     # 3. 1절과 나머지 절의 줄별 글자 수
     for kind_secs in (verses, by("pre")):
@@ -169,7 +214,9 @@ def check(secs, directives, title=None):
                 continue
             for i, (a, b) in enumerate(zip(base, cur), 1):
                 d = abs(a["n"] - b["n"])
-                if d > KEEP_DIFF:
+                if d > KEEP_DIFF and (v["kind"], i) in allowed:
+                    add("주의", f"{v['label']} {i}줄", f"{kind_secs[0]['label']}은 {a['n']}자, 여기는 {b['n']}자 — 몰림 처방으로 줄인 줄. 처음부터 다시 생성할 때는 두 절을 맞춥니다")
+                elif d > KEEP_DIFF:
                     add("고침", f"{v['label']} {i}줄", f"{kind_secs[0]['label']}은 {a['n']}자, 여기는 {b['n']}자 ({d}자 차이)")
                 elif d:
                     add("주의", f"{v['label']} {i}줄", f"{kind_secs[0]['label']}은 {a['n']}자, 여기는 {b['n']}자 (1자 차이)")
@@ -177,10 +224,17 @@ def check(secs, directives, title=None):
     # 4. 줄 길이 · 줄 끝 소리 · 말투
     seen_line, stops, particles, parens, dense = set(), [], [], [], []
     for s in secs:
-        family = "chorus" if s["kind"] in ("chorus", "final") else s["kind"]
+        n_sung = len(sung_lines(s))
+        if s["kind"] == "pre" and n_sung > PRE_MAX_LINES:
+            add("참고", s["label"], f"{n_sung}줄입니다 (프리코러스는 {PRE_MAX_LINES}줄 이하)")
+        if s["kind"] == "bridge" and n_sung > BRIDGE_MAX_LINES:
+            add("참고", s["label"], f"{n_sung}줄입니다 (브리지는 {BRIDGE_MAX_LINES}줄 이하)")
+        ends = {e for e in (ending(ln["sung"]) for ln in s["lines"]) if e}
+        if len(ends) > 1:
+            add("주의", s["label"], "한 구간 안에 '-ㅂ니다'와 '-요'가 섞였습니다 — 한 말투로 맞춥니다")
         for i, ln in enumerate(s["lines"], 1):
             where = f"{s['label']} {i}줄"
-            key = (family, re.sub(r"\s+", " ", ln["raw"]))
+            key = re.sub(r"\s+", " ", ln["raw"])
             if key in seen_line:  # 똑같이 반복되는 줄은 한 번만 본다
                 continue
             seen_line.add(key)
@@ -209,22 +263,23 @@ def check(secs, directives, title=None):
                     stops.append(where)
             if chars[-1] in PARTICLE_END:
                 particles.append(where)
-            if n >= 5 and sum(1 for c in chars if coda(c)) / n > 0.6:
+            sc = stop_codas(ln["sung"])
+            if sc >= 3 or (n >= 5 and sc / n > 0.4):
                 dense.append(where)
             for pat, label in SERMON:
                 if re.search(pat, ln["sung"]):
                     add("고침", where, f"설교 말투 '{label}' — 하나님께 드리는 1인칭 고백으로 바꿉니다")
-            for pat in STIFF:
+            for pat, msg in SOFT:
                 if re.search(pat, ln["sung"]):
-                    add("주의", where, f"설명 말투 '{pat}' — '-네 · -요 · -리' 같은 고백 어미로")
+                    add("주의", where, msg)
             if s["kind"] == "verse" and re.search(EMOTION, ln["sung"]):
                 add("참고", where, "감정 이름이 있습니다 — 그 감정이 보이는 장면으로 바꿀 수 있는지 봅니다")
     if stops:
         add("참고", "줄 끝", "막히는 받침으로 끝나는 줄: " + ", ".join(stops))
     if particles:
-        add("참고", "줄 끝", "조사·꾸밈말(을/를/은/는/의/에)로 끝나는 줄: " + ", ".join(particles))
+        add("참고", "줄 끝", "'을/를/은/는/의/에'로 끝나는 줄(조사면 긴 음에 걸려 어색할 수 있음): " + ", ".join(particles))
     if dense:
-        add("참고", "발음", "받침이 몰린 줄(글자의 60% 초과): " + ", ".join(dense))
+        add("참고", "발음", "막히는 받침이 몰린 줄: " + ", ".join(dense))
     if parens:
         add("참고", "소괄호", "소괄호 안은 백보컬로 불립니다: " + ", ".join(parens))
 
@@ -244,6 +299,9 @@ def check(secs, directives, title=None):
                 add("고침", "제목", f"후렴에 제목 '{title}'이(가) 없습니다 — 제목이 곧 훅입니다")
             elif lines and t not in lines[0] and t not in lines[-1]:
                 add("주의", "제목", "제목이 후렴의 첫 줄이나 끝 줄에 오면 더 잘 남습니다")
+        for o in by("outro"):
+            if o["lines"] and not any(t in x for x in flat(o)):
+                add("참고", o["label"], "아웃트로에 제목이 없습니다 (제목 한 줄로 끝내면 훅이 남습니다)")
         th = hangul(t)
         if th and coda(th[-1]) and coda(th[-1]) not in SONORANT:
             add("주의", "제목", f"제목 끝 '{th[-1]}'의 받침이 소리를 막습니다")
@@ -274,9 +332,9 @@ def print_lines(secs):
             print(f"  {mark} | {ln['raw']}")
 
 
-def report(text, title=None):
+def report(text, title=None, allowed=frozenset()):
     secs, directives = parse(text)
-    issues, total = check(secs, directives, title)
+    issues, total = check(secs, directives, title, allowed)
     n_lines = sum(len(sung_lines(s)) for s in secs)
     print("== 구조 ==")
     print(" → ".join(s["name"] for s in secs) or "(비어 있음)")
@@ -294,11 +352,16 @@ def report(text, title=None):
     return count("고침")
 
 
-def compare(old_text, new_text):
-    """수정 전후를 줄 단위로 비교한다. 글자 수가 2자 이상 달라지면 고침."""
+def compare(old_text, new_text, rushed=False):
+    """수정 전후를 줄 단위로 비교한다. 글자 수가 2자 이상 달라지면 고침.
+
+    rushed=True 이면 줄어든 줄은 몰림 처방으로 보고 '줄임'으로 표시한다.
+    (고침 개수, 일부러 줄인 줄의 (섹션 종류, 줄 번호) 모음)을 돌려준다.
+    """
     old, _ = parse(old_text)
     new, _ = parse(new_text)
     fixes = changed = 0
+    allowed = set()
     print("== 수정 전후 비교 ==")
     if [s["kind"] for s in old] != [s["kind"] for s in new]:
         print("[주의] 섹션 순서가 달라졌습니다 — 곡 전체를 다시 만들어야 할 수 있습니다")
@@ -313,16 +376,21 @@ def compare(old_text, new_text):
                 continue
             changed += 1
             d = y["n"] - x["n"]
-            ok = abs(d) <= KEEP_DIFF
-            fixes += 0 if ok else 1
-            print(f"[{'유지' if ok else '고침'}] {b['label']} {i}줄: {x['n']}자 → {y['n']}자 ({d:+d})"
-                  + ("" if ok else " — 멜로디가 달라질 수 있습니다"))
+            if abs(d) <= KEEP_DIFF:
+                mark, note = "유지", ""
+            elif rushed and d < 0:
+                mark, note = "줄임", " — 몰림 처방. 이 구간의 멜로디는 새로 나옵니다"
+                allowed.add((b["kind"], i))
+            else:
+                mark, note = "고침", " — 멜로디가 달라질 수 있습니다"
+                fixes += 1
+            print(f"[{mark}] {b['label']} {i}줄: {x['n']}자 → {y['n']}자 ({d:+d}){note}")
             print(f"       전 | {x['raw']}")
             print(f"       후 | {y['raw']}")
     if not changed and not fixes:
         print("달라진 줄이 없습니다.")
     print()
-    return fixes
+    return fixes, allowed
 
 
 def read(path):
@@ -337,12 +405,13 @@ def main():
     ap.add_argument("files", nargs="+", help="가사 파일 (--compare 일 때는 이전 수정 순서로 두 개)")
     ap.add_argument("--title", help="곡 제목 — 후렴에 들어 있는지 확인한다")
     ap.add_argument("--compare", action="store_true", help="수정 전후 비교")
+    ap.add_argument("--rushed", action="store_true", help="--compare 와 함께: 몰리는 줄을 일부러 줄였다")
     args = ap.parse_args()
     if args.compare:
         if len(args.files) != 2:
             ap.error("--compare 에는 파일 두 개(이전, 수정)가 필요합니다")
-        fixes = compare(read(args.files[0]), read(args.files[1]))
-        fixes += report(read(args.files[1]), args.title)
+        fixes, allowed = compare(read(args.files[0]), read(args.files[1]), args.rushed)
+        fixes += report(read(args.files[1]), args.title, frozenset(allowed))
     else:
         if len(args.files) != 1:
             ap.error("가사 파일은 하나만 줍니다")
