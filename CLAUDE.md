@@ -92,7 +92,7 @@ AgenticWorkflow/
 │   └── skills/
 │       ├── sermon-orchestrator/     (설교 오케스트레이터 — Phase 0→1→2→3 전체 흐름)
 │       ├── sermon-integrator/       (설교 통합 v3.3 — 중심 자료 기반 md 최종 원고, 자료 읽기·분량 점검·설교 저장(HTML·설교 모음) 스크립트)
-│       ├── sermon-blog/             (설교 블로그 v1.0 — 설교 원고 → 대중용 블로그 글, NotebookLM 겸용 지침)
+│       ├── sermon-blog/             (설교 블로그 v1.1 — 설교 원고 → 대중용 블로그 글)
 │       ├── workflow-generator/      (워크플로우 설계·생성)
 │       └── doctoral-writing/        (박사급 학술 글쓰기)
 ├── translations/glossary.yaml       ← 번역 용어 사전
